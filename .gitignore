@@ -1,0 +1,12 @@
+node_modules
+.vercel
+.output
+dist
+screenshots
+artifacts
+.env
+.env.*
+*.log
+.DS_Store
+.grok/*
+!.grok/app-env.json
