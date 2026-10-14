@@ -8,5 +8,6 @@ artifacts
 .env.*
 *.log
 .DS_Store
+.project_id
 .grok/*
 !.grok/app-env.json
