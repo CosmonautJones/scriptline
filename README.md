@@ -13,7 +13,7 @@ Scriptline is a small web app for people who save reels and then never look at t
 - Pull a stand-in for the post: the caption, the spoken words, one frame, what you can learn, and a small practice
 - Search the log and download the whole notebook
 
-The public post does not include replies. Scriptline does not invent them.
+The public page includes the replies Instagram renders without an account. Replies hidden behind a login are not included, and Scriptline does not ask for a password.
 
 ## What is tested
 

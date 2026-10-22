@@ -26,6 +26,7 @@ export type PostMeta = {
   thumbnailUrl: string | null;
   postedAt: string | null;
   music: { artist: string; title: string; original: boolean } | null;
+  replies: { username: string; text: string; postedAt: string | null }[];
   hasAudio: boolean;
   overLimit: boolean;
 };
@@ -58,7 +59,7 @@ export type TranscribeResult =
 export type Lesson = {
   claim: string;
   brief: string;
-  learnings: { point: string; from: "said" | "caption" | "shown" }[];
+  learnings: { point: string; from: "said" | "caption" | "shown" | "reply" }[];
   concepts: { name: string; meaning: string }[];
   practice: { action: string; proves: string }[];
   check: string;

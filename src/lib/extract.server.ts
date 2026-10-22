@@ -9,6 +9,7 @@ import {
   type Transcript,
   type TranscribeResult,
 } from "./extract-types.ts";
+import { readPublicReplies } from "./comments.server.ts";
 
 const UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
@@ -253,6 +254,7 @@ function toResolved(media: RawMedia, blocked: boolean): Resolved | null {
     thumbnailUrl: media.display_url || null,
     postedAt: postedAtFromId(media.id),
     music,
+    replies: [],
     hasAudio,
     overLimit: duration != null && duration > MAX_TRANSCRIBE_SECONDS,
     videoUrl: hasAudio ? video!.video_url! : null,
@@ -312,6 +314,7 @@ async function resolveInput(rawUrl: string): Promise<Resolved> {
   const cached = mediaCache.get(parsed.shortcode);
   if (cached && Date.now() - cached.at < MEDIA_TTL_MS) return cached.resolved;
   const resolved = await fetchEmbed(parsed.shortcode, parsed.kind);
+  resolved.replies = await readPublicReplies(resolved.url);
   mediaCache.set(resolved.shortcode, { at: Date.now(), resolved });
   return resolved;
 }
@@ -575,14 +578,16 @@ export function parseLesson(value: unknown): Lesson | null {
           if (!item || typeof item !== "object") return [];
           const row = item as Record<string, unknown>;
           const point = typeof row.point === "string" ? clip(row.point, 280) : "";
-          const from: "said" | "caption" | "shown" | null =
+          const from: "said" | "caption" | "shown" | "reply" | null =
             row.from === "said"
               ? "said"
               : row.from === "caption"
                 ? "caption"
                 : row.from === "shown"
                   ? "shown"
-                  : null;
+                  : row.from === "reply"
+                    ? "reply"
+                    : null;
           if (!point || !from) return [];
           return [{ point, from }];
         })
@@ -597,7 +602,9 @@ async function askForLesson(source: string, imageUrl: string | null): Promise<Le
   if (!apiKey) throw new Error("Pulling ideas isn't available right now.");
   const instructions = [
     "You are writing a stand-in for opening the post. The reader should not need Instagram.",
-    "Use only the caption, the spoken words, and the attached frame. You do not have comments or replies. Never invent them.",
+    "Use only the caption, the spoken words, the attached frame, and the replies listed below. Never invent a reply.",
+    "Ignore replies that only say Discord, drop an emoji, or demand a message. A reply that asks a real question or adds a fact can be a learning.",
+    "from is said, caption, shown, or reply.",
     "Do not invent on-screen text you cannot read. The frame is one moment, not the whole video.",
     "brief is four to six sentences: who, what they claim, what is visible, and what they did not actually show.",
     "learnings are three to five things worth keeping. from is said, caption, or shown. shown only when the frame or the words describe something visible.",
@@ -675,6 +682,13 @@ export async function learnPostInner(rawUrl: string, script: string): Promise<Le
       resolved.altText ? `On-screen description: ${clip(resolved.altText, 800)}` : "On-screen description: none",
       resolved.thumbnailUrl ? "A cover frame is attached." : "No cover frame.",
       resolved.caption ? `Caption: ${clip(resolved.caption, 1500)}` : "Caption: none",
+      resolved.replies.length
+        ? `Replies:\n${resolved.replies
+            .slice(0, 20)
+            .map((reply) => `@${reply.username}: ${reply.text}`)
+            .join("\n")
+            .slice(0, 2500)}`
+        : "Replies: none shown without an account.",
       `Spoken words:\n${sourceText}`,
     ].join("\n\n");
     const key = sourceKey(resolved.shortcode, source);

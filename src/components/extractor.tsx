@@ -38,7 +38,7 @@ function splitLinks(raw: string): string[] {
   return links;
 }
 
-type Phase = "idle" | "reading" | "transcribing" | "done";
+type Phase = "idle" | "reading" | "transcribing" | "digesting" | "done";
 
 function download(filename: string, content: string, type: string) {
   const blob = new Blob([content], { type });
@@ -151,7 +151,22 @@ export function Extractor() {
       setTranscript(nextTranscript);
       setTranscriptError(nextError);
       const previous = loadLog().find((item) => item.post?.shortcode === read.post.shortcode);
-      setLesson(previous?.lesson ?? null);
+      const repliesArrived = (read.post.replies?.length ?? 0) > 0 && !(previous?.post?.replies?.length);
+      let nextLesson = !repliesArrived ? (previous?.lesson ?? null) : null;
+      if (!nextLesson && (nextTranscript?.text || read.post.caption)) {
+        setPhase("digesting");
+        try {
+          const learned = await learnPost({
+            data: { url: read.post.url, script: nextTranscript?.text || read.post.caption },
+          });
+          if (learned.ok) nextLesson = learned.lesson;
+          else setLessonError(learned.error);
+        } catch (caught) {
+          setLessonError(caught instanceof Error ? caught.message : "The ideas couldn't be pulled.");
+        }
+      }
+      setLesson(nextLesson);
+      if (nextLesson) setView("practice");
       setHistory(
         commitLog({
           ...started,
@@ -160,7 +175,7 @@ export function Extractor() {
           post: read.post,
           transcript: nextTranscript,
           transcriptError: nextError,
-          lesson: previous?.lesson ?? null,
+          lesson: nextLesson,
         }),
       );
       setPhase("done");
@@ -254,7 +269,7 @@ export function Extractor() {
       .join("\n\n");
   }
 
-  const busy = phase === "reading" || phase === "transcribing" || progress !== null;
+  const busy = phase === "reading" || phase === "transcribing" || phase === "digesting" || progress !== null;
   const portrait = post ? (post.height ?? 1) >= (post.width ?? 0) : true;
   const needle = query.trim().toLowerCase();
   const shown = needle
@@ -308,7 +323,9 @@ export function Extractor() {
                   ? "Reading…"
                   : phase === "transcribing"
                     ? "Transcribing…"
-                    : "Extract"}
+                    : phase === "digesting"
+                      ? "Digesting…"
+                      : "Extract"}
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -336,7 +353,9 @@ export function Extractor() {
             ? "Reading the post"
             : phase === "transcribing"
               ? "Transcribing speech"
-              : error
+              : phase === "digesting"
+                ? "Digesting the post"
+                : error
                 ? error
                 : ""}
         </p>
@@ -468,6 +487,21 @@ export function Extractor() {
               {post.altText ? (
                 <p className="mt-2 text-sm leading-relaxed text-muted">Alt text: {post.altText}</p>
               ) : null}
+              {post.replies?.length ? (
+                <div className="mt-4">
+                  <h3 className="text-xs font-semibold tracking-widest text-muted uppercase">
+                    Replies · {post.replies.length}
+                  </h3>
+                  <ul className="mt-2 flex flex-col gap-3">
+                    {post.replies.map((reply) => (
+                      <li key={`${reply.username}-${reply.postedAt}-${reply.text.slice(0, 24)}`}>
+                        <p className="text-sm font-semibold">@{reply.username}</p>
+                        <p className="mt-1 text-sm leading-relaxed">{reply.text}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               {post.hashtags.length || post.mentions.length ? (
                 <ul className="mt-3 flex flex-wrap gap-2">
                   {post.hashtags.map((tag) => (
@@ -571,8 +605,7 @@ export function Extractor() {
                   {!lesson && !learning ? (
                     <div className="flex flex-col gap-3">
                       <p className="text-base leading-relaxed text-muted">
-                        Caption, spoken words, and one frame. Enough to skip the app. Replies are
-                        not included, because Instagram does not give them out.
+                        Caption, spoken words, the cover frame, and the replies on the public page.
                       </p>
                       <button
                         type="button"
@@ -612,7 +645,9 @@ export function Extractor() {
                                     ? "From the audio"
                                     : item.from === "caption"
                                       ? "From the caption"
-                                      : "From the frame"}
+                                      : item.from === "reply"
+                                        ? "From a reply"
+                                        : "From the frame"}
                                 </p>
                               </li>
                             ))}
@@ -814,7 +849,7 @@ export function Extractor() {
             <Feature
               icon={<ListChecks className="size-5" aria-hidden="true" />}
               title="The whole post"
-              body="Caption, spoken words, one frame, and what is worth keeping. Not the comment thread."
+              body="Caption, spoken words, the cover frame, and the replies on the public page."
             />
           </section>
         )}
@@ -896,7 +931,7 @@ export function Extractor() {
         ) : null}
 
           <p className="text-sm leading-relaxed text-muted">
-            Public posts only. The caption, the audio, and one frame. Not the replies. Private,
+            Public posts only. Replies are the ones Instagram shows without an account. Private,
             deleted, and login-walled links won't open.
           </p>
       </main>

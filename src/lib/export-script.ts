@@ -38,6 +38,13 @@ export function toMarkdown(post: PostMeta, transcript: Transcript | null, lesson
     lines.push("");
   }
   lines.push("## Caption", "", post.caption || "_No caption._", "");
+  if (post.replies?.length) {
+    lines.push("## Replies", "");
+    for (const reply of post.replies) {
+      lines.push(`- **@${reply.username}.** ${reply.text}`);
+    }
+    lines.push("");
+  }
   if (transcript && transcript.text) {
     lines.push(
       `## Script`,
@@ -62,7 +69,14 @@ export function toMarkdown(post: PostMeta, transcript: Transcript | null, lesson
     if (lesson.learnings?.length) {
       lines.push("## What you can learn", "");
       for (const item of lesson.learnings) {
-        const from = item.from === "said" ? "audio" : item.from === "caption" ? "caption" : "frame";
+        const from =
+          item.from === "said"
+            ? "audio"
+            : item.from === "caption"
+              ? "caption"
+              : item.from === "reply"
+                ? "reply"
+                : "frame";
         lines.push(`- ${item.point} _(${from})_`);
       }
       lines.push("");

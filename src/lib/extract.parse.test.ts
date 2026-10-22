@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { commentBody } from "./comments.server.ts";
 import { parseEmbedHtml, parseLesson } from "./extract.server.ts";
 
 describe("parseEmbedHtml", () => {
@@ -54,5 +55,29 @@ describe("parseLesson", () => {
       ],
     });
     assert.equal(lesson, null);
+  });
+
+  it("keeps a reply that adds a question", () => {
+    const lesson = parseLesson({
+      ...grounded,
+      learnings: [
+        { point: "Trades run through a broker API.", from: "said" },
+        { point: "Someone asked whether both strategies lost.", from: "reply" },
+      ],
+    });
+    assert.equal(lesson?.learnings[1]?.from, "reply");
+  });
+});
+
+describe("commentBody", () => {
+  it("strips the name, the time, and the like button", () => {
+    assert.equal(
+      commentBody("aust816 1d Did both strategies lose or just 1? Like Reply", "aust816"),
+      "Did both strategies lose or just 1?",
+    );
+  });
+
+  it("drops a reply that is only the chrome", () => {
+    assert.equal(commentBody("mattgifs 5h", "mattgifs"), "");
   });
 });
