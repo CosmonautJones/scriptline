@@ -40,11 +40,20 @@ Speech-to-text and the practice pass call the [xAI API](https://docs.x.ai). Set 
 XAI_API_KEY=your_key npm run dev
 ```
 
-## Limits
+## What a link returns
 
-- Reels longer than 10 minutes are saved with metadata and caption only
-- A burst of extractions is rate-limited so one session cannot drain the API key
-- The log lives in this browser. Download the notebook if you want a copy you can move
+This is the contract. A reel, a video, a photo, and a carousel are not treated the same.
+
+| Post | Transcript | Caption | Replies | Picture | Digest |
+|---|---|---|---|---|---|
+| Reel or video, 10 minutes or under | Full spoken script, with timed lines | Yes | The ones Instagram shows without an account | One cover frame, not every moment | Yes |
+| Reel or video, over 10 minutes | Skipped | Yes | Same | One cover frame | Yes, from the caption |
+| Photo | None. There is no audio | Yes | Same | The photo | Yes, from the caption and the photo |
+| Carousel | Only the first video slide, and only if that slide is 10 minutes or under | The caption for the whole post | Same | The cover only. Later slides are not read | Yes, from what was actually read |
+
+Replies hidden behind a login are not included. Scriptline does not ask for a password. A carousel slide that is only a picture is not transcribed, and its on-slide text is not read unless Instagram put that text in the post caption.
+
+A burst of extractions is rate-limited so one session cannot drain the API key. The log lives in this browser. Download the notebook if you want a copy you can move.
 
 ## Not affiliated
 
