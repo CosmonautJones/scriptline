@@ -10,8 +10,18 @@ Scriptline is a small web app for people who save reels and then never look at t
 - Read metadata without an Instagram login: creator, caption, views, likes, comments, music
 - Transcribe the spoken audio, with timed lines
 - Export a single reel as Markdown, plain text, SRT, or JSON
-- Pull the idea out of the pitch: a claim, concepts, a practice, and a check question
+- Pull a stand-in for the post: the caption, the spoken words, one frame, what you can learn, and a small practice
 - Search the log and download the whole notebook
+
+The public post does not include replies. Scriptline does not invent them.
+
+## What is tested
+
+- The embed parser, against a fixture of Instagram's public embed page
+- The lesson check that rejects anything cited from comments
+- A production build and a smoke load of the page
+
+Live reels still depend on Instagram and on the speech API. A private or deleted post fails on purpose.
 
 Public posts only. Private, deleted, and login-walled links will not open.
 

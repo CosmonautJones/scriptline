@@ -57,6 +57,8 @@ export type TranscribeResult =
 
 export type Lesson = {
   claim: string;
+  brief: string;
+  learnings: { point: string; from: "said" | "caption" | "shown" }[];
   concepts: { name: string; meaning: string }[];
   practice: { action: string; proves: string }[];
   check: string;

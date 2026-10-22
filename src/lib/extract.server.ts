@@ -8,7 +8,7 @@ import {
   type ReadResult,
   type Transcript,
   type TranscribeResult,
-} from "./extract-types";
+} from "./extract-types.ts";
 
 const UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
@@ -538,12 +538,13 @@ function clip(value: string, max: number): string {
   return trimmed.length > max ? trimmed.slice(0, max).trim() : trimmed;
 }
 
-function asLesson(value: unknown): Lesson | null {
+export function parseLesson(value: unknown): Lesson | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
   const claim = typeof raw.claim === "string" ? clip(raw.claim, 400) : "";
+  const brief = typeof raw.brief === "string" ? clip(raw.brief, 900) : "";
   const check = typeof raw.check === "string" ? clip(raw.check, 240) : "";
-  if (claim.length < 8 || check.length < 8) return null;
+  if (claim.length < 8 || brief.length < 40 || check.length < 8) return null;
   const concepts = Array.isArray(raw.concepts)
     ? raw.concepts
         .flatMap((item) => {
@@ -568,27 +569,59 @@ function asLesson(value: unknown): Lesson | null {
         })
         .slice(0, 3)
     : [];
-  if (concepts.length < 1 || practice.length < 1) return null;
-  return { claim, concepts, practice, check };
+  const learnings: Lesson["learnings"] = Array.isArray(raw.learnings)
+    ? raw.learnings
+        .flatMap((item) => {
+          if (!item || typeof item !== "object") return [];
+          const row = item as Record<string, unknown>;
+          const point = typeof row.point === "string" ? clip(row.point, 280) : "";
+          const from: "said" | "caption" | "shown" | null =
+            row.from === "said"
+              ? "said"
+              : row.from === "caption"
+                ? "caption"
+                : row.from === "shown"
+                  ? "shown"
+                  : null;
+          if (!point || !from) return [];
+          return [{ point, from }];
+        })
+        .slice(0, 5)
+    : [];
+  if (concepts.length < 1 || practice.length < 1 || learnings.length < 2) return null;
+  return { claim, brief, learnings, concepts, practice, check };
 }
 
-async function askForLesson(source: string): Promise<Lesson> {
+async function askForLesson(source: string, imageUrl: string | null): Promise<Lesson> {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) throw new Error("Pulling ideas isn't available right now.");
   const instructions = [
-    "Turn this short video into something a person can practice. You are not writing a summary.",
-    "Use only the source. Ignore follow, comment, download, and link-in-bio pitches.",
+    "You are writing a stand-in for opening the post. The reader should not need Instagram.",
+    "Use only the caption, the spoken words, and the attached frame. You do not have comments or replies. Never invent them.",
+    "Do not invent on-screen text you cannot read. The frame is one moment, not the whole video.",
+    "brief is four to six sentences: who, what they claim, what is visible, and what they did not actually show.",
+    "learnings are three to five things worth keeping. from is said, caption, or shown. shown only when the frame or the words describe something visible.",
     "Concepts are ideas they could use without the creator's product.",
     "Each practice is something they can finish in under an hour on their own work.",
     "Do not invent tools, numbers, or steps the source does not support. Do not write a count unless the source stated that count.",
     "If the video is mostly a pitch, say that in the claim and practice the smallest real skill under it.",
     "Plain words. No leverage, unlock, dive in, or game-changer.",
     "Return JSON only:",
-    '{"claim":"one sentence","concepts":[{"name":"","meaning":""}],"practice":[{"action":"","proves":""}],"check":"one question to answer from memory"}',
-    "2 to 4 concepts. 2 practices.",
+    '{"brief":"","claim":"one sentence","learnings":[{"point":"","from":"said"}],"concepts":[{"name":"","meaning":""}],"practice":[{"action":"","proves":""}],"check":"one question to answer from memory"}',
+    "2 to 4 concepts. 2 practices. 3 to 5 learnings.",
   ].join(" ");
+  const plans: Array<string | null> = imageUrl ? [imageUrl, null] : [null, null];
   let last = "";
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < plans.length; attempt++) {
+    const frame = plans[attempt];
+    const userText =
+      attempt === 0 ? source : `${source}\n\nYour last answer was not usable JSON. Return only the object.`;
+    const content = frame
+      ? [
+          { type: "text", text: userText },
+          { type: "image_url", image_url: { url: frame } },
+        ]
+      : userText;
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -598,17 +631,11 @@ async function askForLesson(source: string): Promise<Lesson> {
       body: JSON.stringify({
         model: "grok-4.5",
         temperature: 0.2,
-        max_tokens: 800,
+        max_tokens: 1100,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: instructions },
-          {
-            role: "user",
-            content:
-              attempt === 0
-                ? source
-                : `${source}\n\nYour last answer was not usable JSON. Return only the object.`,
-          },
+          { role: "user", content },
         ],
       }),
       signal: AbortSignal.timeout(45_000),
@@ -617,14 +644,14 @@ async function askForLesson(source: string): Promise<Lesson> {
       if (response.status === 401 || response.status === 403) {
         throw new Error("Pulling ideas isn't available right now.");
       }
-      if (attempt === 0 && response.status >= 500) continue;
+      if (attempt === 0) continue;
       throw new Error("The ideas couldn't be pulled. The script is still here.");
     }
     const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
     last = body.choices?.[0]?.message?.content ?? "";
     try {
       const parsed = JSON.parse(last.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
-      const lesson = asLesson(parsed);
+      const lesson = parseLesson(parsed);
       if (lesson) return lesson;
     } catch {
       // Retry once below.
@@ -645,11 +672,11 @@ export async function learnPostInner(rawUrl: string, script: string): Promise<Le
     }
     const source = [
       `Creator: @${resolved.owner.username}`,
-      resolved.caption ? `Caption: ${clip(resolved.caption, 1200)}` : "",
-      `Words:\n${sourceText}`,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
+      resolved.altText ? `On-screen description: ${clip(resolved.altText, 800)}` : "On-screen description: none",
+      resolved.thumbnailUrl ? "A cover frame is attached." : "No cover frame.",
+      resolved.caption ? `Caption: ${clip(resolved.caption, 1500)}` : "Caption: none",
+      `Spoken words:\n${sourceText}`,
+    ].join("\n\n");
     const key = sourceKey(resolved.shortcode, source);
     const cached = lessonCache.get(key);
     if (cached && Date.now() - cached.at < TRANSCRIPT_TTL_MS) {
@@ -658,7 +685,9 @@ export async function learnPostInner(rawUrl: string, script: string): Promise<Le
     if (!countLesson()) {
       return { ok: false, error: "Too many idea pulls just now. Try again in a few minutes." };
     }
-    const lesson = await askForLesson(source);
+    const frame =
+      resolved.thumbnailUrl && resolved.thumbnailUrl.startsWith("https://") ? resolved.thumbnailUrl : null;
+    const lesson = await askForLesson(source, frame);
     lessonCache.set(key, { at: Date.now(), lesson });
     return { ok: true, lesson };
   } catch (error) {

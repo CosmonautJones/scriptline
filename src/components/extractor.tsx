@@ -242,11 +242,16 @@ export function Extractor() {
   }
 
   function lessonText(item: Lesson): string {
+    const learnings = (item.learnings ?? [])
+      .map((entry) => `- ${entry.point} (${entry.from})`)
+      .join("\n");
     const concepts = item.concepts.map((concept) => `${concept.name}: ${concept.meaning}`).join("\n");
     const practice = item.practice
       .map((step, index) => `${index + 1}. ${step.action}\n${step.proves}`)
       .join("\n\n");
-    return `Claim\n${item.claim}\n\nConcepts\n${concepts}\n\nPractice\n${practice}\n\nCheck\n${item.check}`;
+    return [`The post\n${item.brief ?? ""}`, learnings ? `What you can learn\n${learnings}` : "", `Claim\n${item.claim}`, `Concepts\n${concepts}`, `Practice\n${practice}`, `Check\n${item.check}`]
+      .filter(Boolean)
+      .join("\n\n");
   }
 
   const busy = phase === "reading" || phase === "transcribing" || progress !== null;
@@ -543,7 +548,7 @@ export function Extractor() {
                         view === "practice" ? "bg-surface-2 text-fg" : "text-muted"
                       }`}
                     >
-                      Practice
+                      Context
                     </button>
                   </div>
                 ) : null}
@@ -566,8 +571,8 @@ export function Extractor() {
                   {!lesson && !learning ? (
                     <div className="flex flex-col gap-3">
                       <p className="text-base leading-relaxed text-muted">
-                        The script is the raw material. Pull the claim, the ideas worth keeping, and
-                        something you can do today without their product.
+                        Caption, spoken words, and one frame. Enough to skip the app. Replies are
+                        not included, because Instagram does not give them out.
                       </p>
                       <button
                         type="button"
@@ -575,16 +580,45 @@ export function Extractor() {
                         disabled={!transcript?.text && !post.caption}
                         className="h-12 rounded-xl bg-accent px-5 text-base font-semibold text-accent-fg disabled:opacity-60"
                       >
-                        Extract the ideas
+                        Read the post
                       </button>
                     </div>
                   ) : null}
                   {learning ? (
-                    <p className="text-sm text-muted">Reading for the idea, not a recap…</p>
+                    <p className="text-sm text-muted">Reading the whole post…</p>
                   ) : null}
                   {lessonError ? <p className="text-base leading-relaxed text-muted">{lessonError}</p> : null}
                   {lesson ? (
                     <div className="flex flex-col gap-5">
+                      {lesson.brief ? (
+                        <div>
+                          <h3 className="text-xs font-semibold tracking-widest text-accent uppercase">
+                            The post
+                          </h3>
+                          <p className="mt-2 text-base leading-relaxed">{lesson.brief}</p>
+                        </div>
+                      ) : null}
+                      {lesson.learnings?.length ? (
+                        <div>
+                          <h3 className="text-xs font-semibold tracking-widest text-muted uppercase">
+                            What you can learn
+                          </h3>
+                          <ul className="mt-2 flex flex-col gap-3">
+                            {lesson.learnings.map((item) => (
+                              <li key={item.point}>
+                                <p className="text-sm leading-relaxed">{item.point}</p>
+                                <p className="mt-1 text-xs font-medium tracking-wide text-muted uppercase">
+                                  {item.from === "said"
+                                    ? "From the audio"
+                                    : item.from === "caption"
+                                      ? "From the caption"
+                                      : "From the frame"}
+                                </p>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
                       <div>
                         <h3 className="text-xs font-semibold tracking-widest text-accent uppercase">Claim</h3>
                         <p className="mt-2 text-base leading-relaxed">{lesson.claim}</p>
@@ -779,8 +813,8 @@ export function Extractor() {
             />
             <Feature
               icon={<ListChecks className="size-5" aria-hidden="true" />}
-              title="What to practice"
-              body="The claim, the ideas you can reuse, and one thing to do today. Not another summary."
+              title="The whole post"
+              body="Caption, spoken words, one frame, and what is worth keeping. Not the comment thread."
             />
           </section>
         )}
@@ -861,9 +895,10 @@ export function Extractor() {
           </section>
         ) : null}
 
-        <p className="text-sm leading-relaxed text-muted">
-          Public posts only. Private, deleted, and login-walled links won't open.
-        </p>
+          <p className="text-sm leading-relaxed text-muted">
+            Public posts only. The caption, the audio, and one frame. Not the replies. Private,
+            deleted, and login-walled links won't open.
+          </p>
       </main>
     </div>
   );

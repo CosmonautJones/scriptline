@@ -58,6 +58,15 @@ export function toMarkdown(post: PostMeta, transcript: Transcript | null, lesson
     }
   }
   if (lesson) {
+    if (lesson.brief) lines.push("## The post", "", lesson.brief, "");
+    if (lesson.learnings?.length) {
+      lines.push("## What you can learn", "");
+      for (const item of lesson.learnings) {
+        const from = item.from === "said" ? "audio" : item.from === "caption" ? "caption" : "frame";
+        lines.push(`- ${item.point} _(${from})_`);
+      }
+      lines.push("");
+    }
     lines.push("## Claim", "", lesson.claim, "", "## Concepts", "");
     for (const concept of lesson.concepts) {
       lines.push(`- **${concept.name}.** ${concept.meaning}`);
